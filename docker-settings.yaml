@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root  # Устанавливаем пароль для root
+      MYSQL_DATABASE: cardsdb    # Создаем базу данных cardsdb
+    ports:
+      - "3306:3306"
+    networks:
+      - app-network
+    volumes:
+      - db-data:/var/lib/mysql
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db-data:
+    driver: local

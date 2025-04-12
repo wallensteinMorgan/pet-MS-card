@@ -4,7 +4,6 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-
 @Entity
 @Table(name = "cards")
 @AllArgsConstructor

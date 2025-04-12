@@ -1,11 +1,8 @@
 package com.example.demo.service.impl;
 
-
 import com.example.demo.dto.CardDTO;
 import com.example.demo.entity.CardEntity;
-import com.example.demo.exception.CardNotFoundException;
-import com.example.demo.exception.InvalidCardTypeException;
-import com.example.demo.exception.InvalidPaymentSystemException;
+import com.example.demo.exception.*;
 import com.example.demo.mapper.CardMapper;
 import com.example.demo.repository.CardRepository;
 import com.example.demo.service.CardService;
@@ -14,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -74,13 +70,15 @@ public class CardServiceImpl implements CardService {
         cardDTO.setPaymentSystem(convertToUpperCasePaymentSystem);
         cardDTO.setCardType(convertToUpperCaseCardType);
 
+        if (!Validator.isValidId(cardDTO.getAccountId()) || !Validator.isValidId(cardDTO.getUserId())) {
+            throw new BaseValidationException("Incorrect userId or accountId, it should be > 0");
+        }
+
         if (!Validator.isValidCardType(cardDTO.getCardType())) {
-            log.error("Invalid card type: {}", cardDTO.getCardType());
-            throw new InvalidCardTypeException("The card type is incorrect.");
+            throw new InvalidBaseTypeException("The card type is incorrect.");
         }
         if (!Validator.isValidPaymentSystem(cardDTO.getPaymentSystem())) {
-            log.error("Incorrect payment system: {}", cardDTO.getPaymentSystem());
-            throw new InvalidPaymentSystemException("The payment system is specified incorrectly.");
+            throw new InvalidPaymentSystemException("Incorrect payment system: " + cardDTO.getPaymentSystem());
         }
         CardEntity cardEntity = cardMapper.toEntity(cardDTO);
         CardEntity savedCardEntity = cardRepository.save(cardEntity);
@@ -102,10 +100,6 @@ public class CardServiceImpl implements CardService {
     @Override
     public CardDTO updateCardById(Long id, Consumer<CardEntity> updateFunction) {
         log.info("Attempt to update a card with an id {}", id);
-        if (!Validator.isValidId(id)) {
-            log.error("Attempt to find a card with an incorrect id: {}", id);
-            throw new IllegalArgumentException("the card id cannot be null or < 0");
-        }
         CardEntity entity = getEntityById(id);
         updateFunction.accept(entity);
         cardRepository.save(entity);
@@ -116,36 +110,24 @@ public class CardServiceImpl implements CardService {
     private CardEntity getEntityById(Long id) {
         log.info("Attempt to get a card with an id {}", id);
         if (!Validator.isValidId(id)) {
-            log.error("Attempt to find a card with an incorrect id: {}", id);
-            throw new IllegalArgumentException("the card id cannot be null or < 0");
+            throw new BaseValidationException(ErrorCode.INVALID_CARD_ID);
         }
-        return cardRepository.findById(id).orElseThrow(() -> {
-            log.error("Card with id {} not found", id);
-            return new CardNotFoundException("A card with an id " + id + " not found");
-        });
+        return cardRepository.findById(id).orElseThrow(() -> new CardNotFoundException(ErrorCode.CARD_NOT_FOUND_BY_ID, id));
     }
 
     private CardEntity getEntityByUserId(Long id) {
         log.info("Attempt to get a card with user Id {}", id);
         if (!Validator.isValidId(id)) {
-            log.error("Attempt to find a card with an invalid userId: {}", id);
-            throw new IllegalArgumentException("the user Id of the card cannot be null or < 0");
+            throw new BaseValidationException(ErrorCode.INVALID_USER_ID);
         }
-        return cardRepository.findCardEntityByUserId(id).orElseThrow(() -> {
-            log.error("Card with user Id {} not found", id);
-            return new CardNotFoundException("A card with a userId " + id + " not found");
-        });
+        return cardRepository.findCardEntityByUserId(id).orElseThrow(() -> new CardNotFoundException(ErrorCode.CARD_NOT_FOUND_BY_USER_ID, id));
     }
 
     private CardEntity getEntityByAccountId(Long id) {
         log.info("Attempt to get a card with an AccountId {}", id);
         if (!Validator.isValidId(id)) {
-            log.error("Attempt to find a card with an invalid AccountId: {}", id);
-            throw new IllegalArgumentException("accountId card cannot be equal to null or < 0");
+            throw new BaseValidationException(ErrorCode.INVALID_ACCOUNT_ID);
         }
-        return cardRepository.findCardEntityByAccountId(id).orElseThrow(() -> {
-            log.error("Card with a accountId {} not found", id);
-            return new CardNotFoundException("card with a accountId " + id + " not found");
-        });
+        return cardRepository.findCardEntityByAccountId(id).orElseThrow(() -> new CardNotFoundException(ErrorCode.CARD_NOT_FOUND_BY_ACCOUNT_ID, id));
     }
 }

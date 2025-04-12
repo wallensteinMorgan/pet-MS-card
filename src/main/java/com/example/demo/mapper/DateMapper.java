@@ -1,5 +1,7 @@
 package com.example.demo.mapper;
 
+import com.example.demo.exception.DateMapperException;
+import com.example.demo.exception.ErrorCode;
 import com.example.demo.util.Validator;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -15,7 +17,7 @@ public class DateMapper {
     }
 
     private LocalDate formatDateToCorrect(String expiryDate) {
-        if (! Validator.isValidDateString(expiryDate)) throw new IllegalArgumentException("expiryDate length should be = 10, " + expiryDate + ", enter expiryDate in format: dd-MM-yyyy");
+        if (! Validator.isValidDateString(expiryDate)) throw new DateMapperException(ErrorCode.INVALID_DATE_STRING, expiryDate);
         String delimiter = findDelimiter(expiryDate);
         String[] dateElements = StringUtils.split(expiryDate, delimiter);
         DateTimeFormatter format = createFormat(dateElements, delimiter);
@@ -26,11 +28,11 @@ public class DateMapper {
     private static String findDelimiter(String str) {
         Matcher matcher = Pattern.compile("\\D").matcher(str);
         if (!matcher.find()) {
-            throw new IllegalArgumentException("date format is not supported, please enter in this format: dd-MM-yyyy");
+            throw new DateMapperException(ErrorCode.UNSUPPORTED_DATE_FORMAT);
         }
         String delimiter = matcher.group();
         if (!str.replaceFirst(Pattern.quote(delimiter), "").matches("[\\d" + Pattern.quote(delimiter) + "]+")) {
-            throw new IllegalArgumentException("date format is not supported, please enter in this format: dd-MM-yyyy");
+            throw new DateMapperException(ErrorCode.UNSUPPORTED_DATE_FORMAT);
         }
         return delimiter;
     }

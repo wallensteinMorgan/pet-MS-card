@@ -1,6 +1,5 @@
 package com.example.demo.mapper;
 
-
 import com.example.demo.dto.CardDTO;
 import com.example.demo.entity.CardEntity;
 import org.mapstruct.Mapper;
@@ -11,7 +10,6 @@ import org.mapstruct.Named;
 public interface CardMapper {
     @Mapping(source = "cardNumber", target = "cardNumber", qualifiedByName = "mapCardNumber")
     CardEntity toEntity(CardDTO cardDTO);
-
 
     CardDTO toDTO(CardEntity cardEntity);
     @Named("mapCardNumber")
@@ -25,5 +23,4 @@ public interface CardMapper {
     static String maskCardNumber(String cardNumber) {
         return "************" + cardNumber.substring(12);
     }
-
 }

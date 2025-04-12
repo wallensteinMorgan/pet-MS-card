@@ -1,5 +1,7 @@
 package com.example.demo.service.impl;
 
+import com.example.demo.exception.BaseTransactionException;
+import com.example.demo.exception.ErrorCode;
 import com.example.demo.service.CardService;
 import com.example.demo.service.CardTransactionService;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +30,7 @@ public class CardTransactionServiceImpl implements CardTransactionService {
         cardService.updateCardById(id,
                 (entity) -> {
                     if (entity.getBalance().compareTo(amount) < 0) {
-                        log.error("On card {} not enough money for payment. on card: {}, needed: {}", id, entity.getBalance(), amount);
-                        throw new RuntimeException("Not enough money on card " + id);
+                        throw new BaseTransactionException(ErrorCode.INSUFFICIENT_BALANCE, entity.getId(), entity.getBalance(), amount);
                     }
                     entity.setBalance(entity.getBalance().subtract(amount));
                 }

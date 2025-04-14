@@ -1,6 +1,6 @@
 package com.example.demo.exception;
 
-public class CardNotFoundException extends RuntimeException {
+public class CardNotFoundException extends BaseException {
     public CardNotFoundException() {
     }
 

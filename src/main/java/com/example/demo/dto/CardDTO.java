@@ -12,7 +12,6 @@ import java.math.BigDecimal;
 @Builder
 public class CardDTO {
 
-    //In CardDto id can be null
     private Long id;
 
     @NotNull(message = "account id is required")

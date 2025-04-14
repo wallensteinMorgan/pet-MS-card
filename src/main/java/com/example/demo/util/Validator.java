@@ -3,14 +3,12 @@ package com.example.demo.util;
 import com.example.demo.entity.CardType;
 import lombok.extern.slf4j.Slf4j;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 
 @Slf4j
 public class Validator {
-    public static boolean isCardNumberNullOrBlank(String cardNumber) {
-        return cardNumber == null || cardNumber.isBlank();
-    }
 
     public static boolean isValidId(Long id) {
         if (id == null) return false;
@@ -38,5 +36,8 @@ public class Validator {
     public static boolean isValidDateString(String date) {
         if (date.length() != 10) return false;
         else return true;
+    }
+    public static boolean isExpiryDateValid(LocalDate expiryDate) {
+        return expiryDate != null && expiryDate.isAfter(LocalDate.now());
     }
 }

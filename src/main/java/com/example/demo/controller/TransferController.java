@@ -19,21 +19,22 @@ public class TransferController {
     private final CardTransactionService transactionService;
 
     @PostMapping("/pay")
-    public void processPayment(@RequestParam Long id, @RequestParam BigDecimal amount) {
+    public void processPayment(@RequestParam Long userId, @RequestParam BigDecimal amount) {
         checkAmount(amount);
-        transactionService.processPayment(id, amount);
+        transactionService.processPayment(userId, amount);
     }
 
     @PostMapping("/receive")
-    public void processReceiving(@RequestParam Long id, @RequestParam BigDecimal amount) {
+    public void processReceiving(@RequestParam Long userId, @RequestParam BigDecimal amount) {
         checkAmount(amount);
-        transactionService.processReceiving(id, amount);
+        transactionService.processReceiving(userId, amount);
     }
 
-    @PostMapping()
-    public void processTransfer(@RequestParam Long fromId, @RequestParam Long toId, @RequestParam BigDecimal amount) {
+    @PostMapping("/transfer")
+    public void processTransfer(@RequestParam Long fromUserId, @RequestParam Long toUserId, @RequestParam BigDecimal amount) {
+
         checkAmount(amount);
-        transactionService.processTransfer(fromId, toId, amount);
+        transactionService.processTransfer(fromUserId, toUserId, amount);
     }
     private void checkAmount(BigDecimal amount) {
         if (! Validator.isValidAmount(amount)) {

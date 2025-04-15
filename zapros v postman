@@ -1,0 +1,31 @@
+Правильные запросы для всех операций:
+1. Перевод между картами (регистрозависимый вариант)
+POST http://localhost:4444/transfer/transfer?fromUserId=203&toUserId=204&amount=100
+2. Пополнение карты
+POST http://localhost:4444/transfer/receive?userId=203&amount=100
+3. Списание средств
+POST http://localhost:4444/transfer/pay?userId=203&amount=50
+Для JSON-запросов:
+4. Добавление карты
+POST http://localhost:4444/cards
+Content-Type: application/json
+{
+    "accountId": 145,
+    "userId": 547,
+    "cardNumber": "1237894561597896",
+    "balance": 100.00,
+    "expiryDate": "2028-05-09",
+    "active": true,
+    "cardType": "Debit",
+    "paymentSystem": "Visa"
+}
+5. Удаление карты
+DELETE http://localhost:4444/cards/4
+6. Получить карту по user
+GET http://localhost:4444/cards/user/2
+6. Получить карту по account
+GET http://localhost:4444/cards/account/2
+6. Получить карту по id
+GET http://localhost:4444/cards/id/2
+9. Изменить состояние карты
+POST http://localhost:4444/cards/setActive/2/true

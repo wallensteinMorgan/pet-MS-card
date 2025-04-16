@@ -1,4 +1,16 @@
 spring:
+  redis:
+    host: localhost  # или IP вашего Redis-сервера
+    port: 6379       # стандартный порт Redis
+    password: root
+    database: 0      # номер базы данных (по умолчанию 0)
+    timeout: 5000    # таймаут подключения (мс)
+    lettuce:         # настройки пула соединений (Lettuce - клиент по умолчанию)
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
   kafka:
     bootstrap-servers: localhost:9092
 #    consumer:

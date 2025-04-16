@@ -2,14 +2,18 @@ package com.example.demo.service;
 
 
 import com.example.demo.dto.CardDTO;
+import com.example.demo.dto.CardNotificationEvent;
 import com.example.demo.entity.CardEntity;
+import com.example.demo.exception.BaseTransactionException;
 import com.example.demo.service.impl.CardTransactionServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
 import java.util.function.Consumer;
@@ -24,6 +28,8 @@ import static org.mockito.Mockito.*;
 public class CardTransactionServiceImplTest {
     @Mock
     private CardService cardService;
+    @Mock
+    private KafkaTemplate<String, CardNotificationEvent> kafkaTemplate;
     @InjectMocks
     private CardTransactionServiceImpl cardTransactionService;
 
@@ -35,172 +41,102 @@ public class CardTransactionServiceImplTest {
         cardEntity = new CardEntity();
         cardEntity.setId(1L);
         cardEntity.setBalance(new BigDecimal("100.00"));
-
+        cardEntity.setCardNumber("1234567891234567");
         cardDTO = new CardDTO();
         cardDTO.setId(1L);
+        cardDTO.setBalance(new BigDecimal("100.00"));
+        cardDTO.setCardNumber("1234567891234567");
+    }
+    @Test // зачисление на карту
+    void processReceiving_ShouldIncreaseBalanceAndSendEvent(){
+        BigDecimal amount = new BigDecimal("50.00");
+        Long userId = 1L;
+
+        when(cardService.getCardByUserId(userId)).thenReturn(cardDTO);
+
+        cardTransactionService.processReceiving(userId, amount);
+
+        ArgumentCaptor<Consumer<CardEntity>> captor = ArgumentCaptor.forClass(Consumer.class);
+        verify(cardService).updateCardById(eq(1L), captor.capture());
+
+        Consumer<CardEntity> updateConsumer = captor.getValue();
+        CardEntity entityToUpdate = new CardEntity();
+        entityToUpdate.setBalance(new BigDecimal("100.00"));
+        updateConsumer.accept(entityToUpdate);
+        assertEquals(new BigDecimal("150.00"), entityToUpdate.getBalance());
+
+        verify(kafkaTemplate).send(eq("card-notifications"), any(CardNotificationEvent.class));
     }
 
-    @Test
-        // баланс карты увеличивается при поступлении
-    void processReceiving_WhenAmountWasIncreased_ShouldIncreaseBalance() {
-        BigDecimal amountToAdd = new BigDecimal("50.00");
-        BigDecimal expectedBalance = cardEntity.getBalance().add(amountToAdd);
-
-        CardDTO updatedCardDTO = new CardDTO();
-        updatedCardDTO.setId(1L);
-        updatedCardDTO.setBalance(expectedBalance);
-
-        when(cardService.updateCardById(eq(1L), any())).thenReturn(updatedCardDTO);
-
-        when(cardService.getCardById(1L)).thenReturn(updatedCardDTO);
-
-        cardTransactionService.processReceiving(1L, amountToAdd);
-
-        assertEquals(expectedBalance, cardService.getCardById(1L).getBalance());
-
-        verify(cardService, times(1)).updateCardById(eq(1L), any());
-    }
 
     @Test
-        //баланс карты уменьшается, когда средства списываются с карты
+        //списание с карты, если денег хватает
     void processPayment_WhenBalanceIsSufficient_ShouldReduceBalance() {
         BigDecimal amountToPay = new BigDecimal("50.00");
-        BigDecimal initialBalance = new BigDecimal("100.00");
-        BigDecimal expectedBalance = initialBalance.subtract(amountToPay);
+        Long userId = 1L;
 
-        CardDTO updatedCardDTO = new CardDTO();
-        updatedCardDTO.setId(1L);
-        updatedCardDTO.setBalance(expectedBalance);
+        when(cardService.getCardByUserId(userId)).thenReturn(cardDTO);
+        cardTransactionService.processPayment(userId, amountToPay);
 
-        when(cardService.getCardById(eq(1L))).thenReturn(updatedCardDTO);
+        ArgumentCaptor<Consumer<CardEntity>> captor = ArgumentCaptor.forClass(Consumer.class);
+        verify(cardService).updateCardById(eq(1L), captor.capture());
 
-        when(cardService.updateCardById(eq(1L), any())).thenAnswer(invocation -> {
-            Consumer<CardEntity> consumer = invocation.getArgument(1);
-            CardEntity cardEntity = new CardEntity();
-            cardEntity.setBalance(initialBalance);
-            consumer.accept(cardEntity);
-            return null;
-        });
+        Consumer<CardEntity> updateConsumer = captor.getValue();
+        CardEntity entityToUpdate = new CardEntity();
+        entityToUpdate.setBalance(new BigDecimal("100.00"));
+        updateConsumer.accept(entityToUpdate);
+        assertEquals(new BigDecimal("50.00"), entityToUpdate.getBalance());
 
-        cardTransactionService.processPayment(1L, amountToPay);
-
-        assertEquals(expectedBalance, cardService.getCardById(1L).getBalance());
-
-        verify(cardService, times(1)).updateCardById(eq(1L), any());
+        verify(kafkaTemplate).send(eq("card-notifications"), any(CardNotificationEvent.class));
     }
-
     @Test
         //выбрасывается исключение, когда баланс карты недостаточен для оплаты
     void processPayment_WhenBalanceIsInsufficient_ShouldThrowException() {
-        Long cardId = 1L;
-        BigDecimal amountToPay = new BigDecimal("150.00");
+        BigDecimal amount = new BigDecimal("150.00");
+        Long userId = 1L;
 
-        when(cardService.updateCardById(eq(cardId), any())).thenAnswer(invocation -> {
-            Consumer<CardEntity> update = invocation.getArgument(1);
-            update.accept(cardEntity);
-            return cardEntity;
-        });
+        when(cardService.getCardByUserId(userId)).thenReturn(cardDTO);
 
-        Exception ex = assertThrows(RuntimeException.class, () -> {
-            cardTransactionService.processPayment(cardId, amountToPay);
+        assertThrows(BaseTransactionException.class, ()-> {
+            cardTransactionService.processPayment(userId, amount);
         });
-        assertEquals("Not enough money on card " + cardId, ex.getMessage(),
-                "Недостаточно средств");
+        verify(cardService, never()).updateCardById(any(), any());
+        verify(kafkaTemplate, never()).send(any(), any());
     }
 
     @Test
-//оба баланса карт обновляются при успешном переводе средств между картами
-    void processTransfer_WhenAmountIsTransferred_ShouldUpdateBothCards() {
-        Long fromId = 1L;
-        Long toId = 2L;
-        BigDecimal amountToTransfer = new BigDecimal("50.00");
+    void processTransfer_ShouldUpdateBothCards(){
+        Long fromUserId = 1L;
+        Long toUserId = 2L;
+        BigDecimal amount = new BigDecimal("50.00");
 
-        BigDecimal fromCardBalanceAfterPayment = new BigDecimal("100.00").subtract(amountToTransfer);
-        BigDecimal toCardBalanceAfterReceiving = new BigDecimal("200.00").add(amountToTransfer);
+        CardDTO toCardDto = new CardDTO();
+        toCardDto.setId(2L);
+        toCardDto.setBalance(new BigDecimal("200.00"));
+        toCardDto.setCardNumber("6543210987654321");
 
-        CardDTO fromCardDTO = new CardDTO();
-        fromCardDTO.setId(fromId);
-        fromCardDTO.setBalance(fromCardBalanceAfterPayment);
+        when(cardService.getCardByUserId(fromUserId)).thenReturn(cardDTO);
+        when(cardService.getCardByUserId(toUserId)).thenReturn(toCardDto);
 
-        CardDTO toCardDTO = new CardDTO();
-        toCardDTO.setId(toId);
-        toCardDTO.setBalance(toCardBalanceAfterReceiving);
+        cardTransactionService.processTransfer(fromUserId, toUserId, amount);
 
-        when(cardService.updateCardById(eq(fromId), any())).thenReturn(fromCardDTO);  // Мокаем updateCardById для карты отправителя
-        when(cardService.updateCardById(eq(toId), any())).thenReturn(toCardDTO);  // Мокаем updateCardById для карты получателя
-
-        when(cardService.getCardById(fromId)).thenReturn(fromCardDTO);
-        when(cardService.getCardById(toId)).thenReturn(toCardDTO);
-
-        cardTransactionService.processTransfer(fromId, toId, amountToTransfer);  // Вызываем метод processTransfer
-
-        assertEquals(fromCardBalanceAfterPayment, cardService.getCardById(fromId).getBalance());  // Проверяем баланс отправителя
-        assertEquals(toCardBalanceAfterReceiving, cardService.getCardById(toId).getBalance());  // Проверяем баланс получателя
-
-        verify(cardService, times(1)).updateCardById(eq(fromId), any());
-        verify(cardService, times(1)).updateCardById(eq(toId), any());
+        verify(cardService, times(2)).updateCardById(any(), any());
+        verify(kafkaTemplate, times(2)).send(eq("card-notifications"), any(
+                CardNotificationEvent.class
+        ));
     }
     @Test
-        // если при переводе возникла ошибка на стороне получателя,
-        // то операция откатывается и баланс отправителя не изменяется
     void processTransfer_WhenReceivingFails_ShouldRollbackPayment() {
-        Long fromId = 1L;
-        Long toId = 2L;
-        BigDecimal amountToTransfer = new BigDecimal("50.00");
+        Long fromUserId = 1L;
+        Long toUserId = 2L;
+        BigDecimal amountToTransfer = new BigDecimal("150.00");
 
-        CardDTO fromCardDTO = new CardDTO();
-        fromCardDTO.setId(fromId);
-        fromCardDTO.setBalance(new BigDecimal("100.00"));
+        when(cardService.getCardByUserId(fromUserId)).thenReturn(cardDTO);
 
-        CardDTO toCardDTO = new CardDTO();
-        toCardDTO.setId(toId);
-        toCardDTO.setBalance(new BigDecimal("200.00"));
-
-        when(cardService.updateCardById(eq(fromId), any())).thenReturn(fromCardDTO);
-
-        when(cardService.updateCardById(eq(toId), any())).thenThrow(new RuntimeException("Receiving error"));
-
-        when(cardService.getCardById(fromId)).thenReturn(fromCardDTO);
-        when(cardService.getCardById(toId)).thenReturn(toCardDTO);
-
-        assertThrows(RuntimeException.class, () -> cardTransactionService.processTransfer(fromId, toId, amountToTransfer));  // Ожидаем исключение
-
-        assertEquals(new BigDecimal("100.00"), cardService.getCardById(fromId).getBalance());
-
-        assertEquals(new BigDecimal("200.00"), cardService.getCardById(toId).getBalance());
-
-        verify(cardService, times(1)).updateCardById(eq(fromId), any());
-        verify(cardService, times(1)).updateCardById(eq(toId), any());
-    }
-    @Test
-        //если при переводе с карты возникла ошибка, то баланс карты получателя не изменяется
-    void processTransfer_WhenPaymentFails_ShouldNotUpdateReceivingCard() {
-        Long fromId = 1L;
-        Long toId = 2L;
-        BigDecimal amountToTransfer = new BigDecimal("50.00");
-
-        BigDecimal fromCardBalanceAfterPayment = new BigDecimal("100.00").subtract(amountToTransfer);
-        BigDecimal toCardBalanceAfterReceiving = new BigDecimal("200.00").add(amountToTransfer);
-
-        CardDTO fromCardDTO = new CardDTO();
-        fromCardDTO.setId(fromId);
-        fromCardDTO.setBalance(fromCardBalanceAfterPayment);
-
-        CardDTO toCardDTO = new CardDTO();
-        toCardDTO.setId(toId);
-        toCardDTO.setBalance(toCardBalanceAfterReceiving);
-
-        when(cardService.updateCardById(eq(fromId), any())).thenReturn(fromCardDTO);
-        when(cardService.updateCardById(eq(toId), any())).thenReturn(toCardDTO);
-
-        when(cardService.getCardById(fromId)).thenReturn(fromCardDTO);
-        when(cardService.getCardById(toId)).thenReturn(toCardDTO);
-
-        cardTransactionService.processTransfer(fromId, toId, amountToTransfer);
-
-        assertEquals(fromCardBalanceAfterPayment, cardService.getCardById(fromId).getBalance());
-        assertEquals(toCardBalanceAfterReceiving, cardService.getCardById(toId).getBalance());
-        verify(cardService, times(1)).updateCardById(eq(fromId), any());
-        verify(cardService, times(1)).updateCardById(eq(toId), any());
+        assertThrows(BaseTransactionException.class, ()->{
+            cardTransactionService.processTransfer(fromUserId, toUserId, amountToTransfer);
+        });
+        verify(cardService, never()).updateCardById(any(), any());
+        verify(kafkaTemplate, never()).send(any(), any());
     }
 }

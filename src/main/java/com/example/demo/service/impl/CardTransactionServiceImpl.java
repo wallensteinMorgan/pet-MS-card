@@ -32,7 +32,7 @@ public class CardTransactionServiceImpl implements CardTransactionService {
                 entity -> entity.setBalance(entity.getBalance().add(amount)));
 
         CardNotificationEvent event = CardNotificationEvent.builder()
-                .email("mrs.morrigan11@gmail.com")
+                .email("valentinakhvatova7@gmail.com")
                 .cardNumber(card.getCardNumber())
                 .amount(amount)
                 .operationType("DEPOSIT")
@@ -55,7 +55,7 @@ public class CardTransactionServiceImpl implements CardTransactionService {
                 entity -> entity.setBalance(entity.getBalance().subtract(amount)));
 
         CardNotificationEvent event = CardNotificationEvent.builder()
-                .email("mrs.morrigan11@gmail.com")
+                .email("valentinakhvatova7@gmail.com")
                 .cardNumber(card.getCardNumber())
                 .amount(amount)
                 .operationType("PAYMENT")
